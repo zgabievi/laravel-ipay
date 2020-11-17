@@ -7,11 +7,7 @@
 ## Table of Contents
 - [Installation](#installation)
 - [Usage](#usage)
-    - [Payment](#payment)
-    - [Recurring](#recurring)
-    - [Refund](#refund)
-- [Additional Information](#additional-information)
-- [Environment Variables](#environment-variables)
+- [ENV Variables](#environment-variables)
 - [License](#license)
 
 ## Installation
@@ -42,270 +38,379 @@ This command will copy config file for you.
 
 ## Usage
 
-- [Payment](#payment)
-- [Recurring](#recurring)
-- [Refund](#refund)
+> All of the responses are *stdClasses*. 
+> Errors are handled by laravel **abort** helper. 
+> Catch exceptions on your own, if you want to handle them.
 
-### Payment
+**Here are methods provided by this package:**
 
-Default process has several to be completed:
+- [Payment Process](#payment-process) - Initialization of payment process
+    - [Generate Token](#generate-token) - *(Optional)* Token will be auto generated if not provided
+    - [Checkout](#checkout) - Request checkout order to iPay
+    - [Redirect](#redirect) - Redirect user to url that was provided by checkout
+- [Recurring](#recurring) - Repeat payment process using saved order id
+- [Refund](#refund) - Reversal of transaction
+- [Order Details](#order-details) - Check details of order
+- [Order Status](#order-status) - Check status of order
+- [Payment Details](#payment-details) - Check details of payment
+- [Complete Pre-Authentication](#complete-pre-authentication) - Complete pre-authorized order
+- [Helpers](#helpers) - Helper methods to generate checkout
+    - [Purchase Unit](#purchase-unit) - Helper to generate object for purchase unit
+    - [Purchase Item](#purchase-item) - Helper to generate object for purchase item
 
-1. Redirect to card details page
-2. Bank will check payment details on your route
-3. Bank will register payment details on your route
+### Payment Process
 
-#### Step #1
+#### Generate Token
 
-On this step you should redirect user to card details page
-
-```php
-use Zorb\IPay\Facades\IPay;
-
-class PaymentController extends Controller
-{
-    //
-    public function __invoke()
-    {
-        return IPay::redirect([
-            'order_id' => 1,
-        ], false);
-    }
-}
-```
-
-Pass any parameter you want to recieve on check and register step as a first value. (default: `[]`)
-
-Second value is boolean and defines if you want to pre-authorize payment, block amount. (default: `false`)
-
-#### Step #2
-
-On this step bank will check that you are ready to accept payment.
-
-This process is called **PaymentAvail**.
+This step is optional, and if you don't provide token to next request, it will automatically fetch token.
 
 ```php
 use Zorb\IPay\Facades\IPay;
 
-class PaymentCheckController extends Controller
+class PaymentController
 {
-    //
     public function __invoke()
     {
-        // chek that http authentication is correct
-        IPay::checkAuth();
-
-        // check if you are getting request from allowed ip
-        IPay::checkIpAllowed();
-
-        // check if you can find order with provided id
-        $order_id = IPay::getParam('o.order_id');
-        $order = Order::find($order_id);
-    
-        if (!$order) {
-            IPay::sendError('check', 'Order couldn\'t be found with provided id');
-        }
-
-        $trx_id = IPay::getParam('trx_id');
-
-        // send success response
-        IPay::sendSuccess('check', [
-            'amount' => $order->amount,
-            'short_desc' => $order->short_desc,
-            'long_desc' => $order->long_desc,
-            'trx_id' => $trx_id,
-            'account_id' => config('ipay.account_id'),
-            'currency' => config('ipay.currency'),
-        ]);
+        $response = IPay::token();
     }
 }
 ```
 
-*Check [request parameters](#parameters-of-check-request) here*
+Example `$response:`
 
-#### Step #3
+```json
+{
+  "access_token": "eyJraWQiOiIxMDA2IiwiY3R5IjoiYXBwbGljYXRpb25cL2pzb24iLCJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJQdWJsaWMgcGF5bWVudCBBUEkgVjEiLCJhdWQiOiJpUGF5IERlbW8iLCJpc3M",
+  "token_type": "Bearer",
+  "app_id": "1A2019",
+  "expires_in": 1605623557393
+}
+```
 
-On this step bank will provide details of the payment.
+#### Checkout
 
-This process is called **RegisterPayment**.
+Generate order in iPay system and get back order details and redirect urls.
 
 ```php
 use Zorb\IPay\Facades\IPay;
+use Zorb\IPay\Enums\Intent;
 
-class PaymentRegisterController extends Controller
+class PaymentController
 {
-    //
     public function __invoke()
     {
-        // chek that http authentication is correct
-        IPay::checkAuth();
+        $order_id = 1;
 
-        // check if you are getting request from allowed ip
-        IPay::checkIpAllowed();
+        $units = [
+          IPay::purchaseUnit(10), // read more about purchaseUnit bellow
+        ];
 
-        // check if provided signature matches certificate
-        IPay::checkSignature('register');
+        $items = [
+          IPay::purchaseItem(1, 10, 1, 'Item #1'), // read more about purchaseItem bellow
+          IPay::purchaseItem(2, 10, 1, 'Item #2'), // read more about purchaseItem bellow
+        ];
 
-        // check if you can find order with provided id
-        $order_id = IPay::getParam('o.order_id');
-        $order = Order::find($order_id);
-    
-        if (!$order) {
-            IPay::sendError('check', 'Order couldn\'t be found with provided id');
-        }
-
-        $trx_id = IPay::getParam('trx_id');
-        $result_code = IPay::getParam('result_code');
-
-        if (empty($result_code)) {
-            IPay::sendError('register', 'Result code has not been provided');
-        }
-    
-        if ((int)$result_code === 1) {
-            // payment has been succeeded
-        } else {
-            // payment has been failed
-        }
-
-        // send success response
-        IPay::sendSuccess('register');
+        // string $intent - 'CAPTURE', 'AUTHORIZE', 'LOAN'
+        // int $order_id - Your order id
+        // array $units - Purchase units
+        // array $items = [] - (optional) Purchase items
+        // string $token = null - (optional) JWT Token
+        // string $capture_method = 'AUTOMATIC' - (optional) 'AUTOMATIC', 'MANUAL'
+        // string $transaction_id = '' - (optional) Transaction id for recurring
+        $response = IPay::checkout(Intent::Capture, $order_id, $units, $items);
     }
 }
 ```
 
-*Check [request parameters](#parameters-of-register-request) here*
+Example `$response`:
+
+```json
+{
+  "status": "CREATED",
+  "payment_hash": "d7936f718c2b0ec2517a28c9de76966bcbecfe29",
+  "links": [
+    {
+      "href": "https://ipay.ge/opay/api/v1/checkout/orders/899318b1ce0d5885cb7405fe86e3930178ff90be",
+      "rel": "self",
+      "method": "GET"
+    },
+    {
+      "href": "https://ipay.ge/?order_id=899318b1ce0d5885cb7405fe86e3930178ff90be&locale=ka",
+      "rel": "approve",
+      "method": "REDIRECT"
+    }
+  ],
+  "order_id": "899318b1ce0d5885cb7405fe86e3930178ff90be"
+}
+```
+
+#### Redirect
+
+Redirect to payment page which is provided by checkout method.
+
+```php
+use Zorb\IPay\Facades\IPay;
+use Zorb\IPay\Enums\Intent;
+use Zorb\IPay\Enums\CheckoutStatus;
+
+class PaymentController
+{
+    public function __invoke()
+    {
+        $order_id = 1;
+
+        $units = [
+          IPay::purchaseUnit(10), // read more about purchaseUnit bellow
+        ];
+
+        $items = [
+          IPay::purchaseItem(1, 10, 1, 'Item #1'), // read more about purchaseItem bellow
+          IPay::purchaseItem(2, 10, 1, 'Item #2'), // read more about purchaseItem bellow
+        ];
+
+        $response = IPay::checkout(Intent::Capture, $order_id, $units, $items);
+
+        if (isset($response->status) && $response->status === CheckoutStatus::Created) {
+            return IPay::redirect($response);
+        }
+    }
+}
+```
+
+Redirect method will find redirect link for payment and redirect user to that page.
 
 ### Recurring
 
-Recurring process is the same as default process. Difference is that user doesn't have to fill card details again.
-
-1. Request will be sent to bank to start recurring process
-2. Bank will check payment details on your route
-3. Bank will register payment details on your route
+Recurring process is the same as checkout process. 
+You just have to provide transaction id you want to be used for recurring.
 
 ```php
 use Zorb\IPay\Facades\IPay;
+use Zorb\IPay\Enums\Intent;
+use Zorb\IPay\Enums\CheckoutStatus;
 
-class PaymentRecurringController extends Controller
+class PaymentController
 {
-    //
     public function __invoke(string $trx_id)
     {
-        return IPay::repeat($trx_id, [
-            'recurring' => true,
-        ]);
-    }
-}
-```
+        $order_id = 1;
+        $transaction_id = '899318B1CE0D5885CB7'; // Transaction id was provided in you callback url 
+        
+        $units = [
+          IPay::purchaseUnit(10), // read more about purchaseUnit bellow
+        ];
 
-In your check and register controllers you can catch `IPay::getParam('o.recurring')` parameter and now you will know that this process is from recurring request.
+        $items = [
+          IPay::purchaseItem(1, 10, 1, 'Item #1'), // read more about purchaseItem bellow
+          IPay::purchaseItem(2, 10, 1, 'Item #2'), // read more about purchaseItem bellow
+        ];
 
-### Refund
+        $response = IPay::repeat($transaction_id, Intent::Capture, $order_id, $units, $items);
 
-In order to refund money you need to have trx_id of payment and rrn.
-
-```php
-use Zorb\IPay\Facades\IPay;
-
-class PaymentRefundController extends Controller
-{
-    //
-    public function __invoke(string $trx_id, string $rrn)
-    {
-        $result = IPay::refund($trx_id, $rrn);
-
-        if ((int)$result->code === 1) {
-            // refund process succeeded
-        } else {
-            // refund process failed
+        if (isset($response->status) && $response->status === CheckoutStatus::Created) {
+            return IPay::redirect($response);
         }
     }
 }
 ```
 
-*Check [result parameters](#refund-result) here*
+### Refund
 
-## Additional Information
+In order to refund money you need to have order_id of payment.
 
-### Parameters of check request
+```php
+use Zorb\IPay\Facades\IPay;
 
-| Param | Meaning | 
-| --- | --- |
-| merch_id | Merchant ID of your shop *(length 32)* |
-| trx_id | Transaction ID of current payment *(length 32)* |
-| lang_code | ISO 639 language codes *(EN/KA/RU)* |
-| o.* | Additional parameters provided by you on redirect |
-| ts | Payment creation time *(yyyyMMdd HH:mm:ss)* |
+class PaymentController
+{
+    public function __invoke()
+    {
+        $order_id = '899318b1ce0d5885cb7405fe86e3930178ff90be';
 
-### Parameters of register request
+        // string $order_id - Order id provided by checkout process
+        // int $amount - Amount you want to refund (in cents)
+        // string $token = null - (optional) JWT Token
+        $response = IPay::refund($order_id, 10);
+    }
+}
+```
 
-| Param | Meaning | 
-| --- | --- |
-| merch_id | Merchant ID of your shop *(length 32)* |
-| trx_id | Transaction ID of current payment *(length 32)* |
-| merchant_trx | Transaction ID, if it is provided by shop |
-| result_code | Result code of the payment *(1 - Success, 2 - Fail)* |
-| amount | Integer value of payment amount |
-| p.rrn | RRN of payment |
-| p.transmissionDateTime | Authorization request date and time *(MMddHHmmss)* |
-| o.* | Additional parameters provided by you on redirect |
-| m.* | Parameters provided on first phase of payment process |
-| ts | Payment creation time *(yyyyMMdd HH:mm:ss)* |
-| signature | Base64 encoded signature to compare with certificate |
-| p.cardholder | Cardholder name |
-| p.authcode | Authentication code from processing *(ISO 8583 Field 38)* |
-| p.maskedPan | Masked card number |
-| p.isFullyAuthenticated | Result of 3D authentication *(Y - Success, N - Fail)* |
-| p.storage.card.ref | Parameters of the card |
-| p.storage.card.expDt | Expiration date of card *(YYMM)* |
-| p.storage.card.recurrent | Authorization status of recurring process *(Y - Recurring is possible, N - Reucrring is not possive)* |
-| p.storage.card.registered | Card registration status *(Y - Card has been registered, N - Card was not registered)* |
-| ext_result_code | Additional information about result code |
+If response is OK, it means refund process was successful.
 
-### Refund result
+### Order Details
 
-| Key | Meaning  | 
-| --- | --- |
-| code | Numeric value for result code |
-| desc | Description of payment result | 
+In order to get order details you need to have order_id of payment.
 
-### Extended result codes
+```php
+use Zorb\IPay\Facades\IPay;
 
-| Code | Number | Key | Description |
-| --- | :---: | --- | --- |
-| OK | 0 | SUCCESS | The payment was completed successfully, the result was successfully communicated to the store |
-| PREAUTHORIZE_OK | 3 | SUCCESS | The blocking of the amount was completed successfully, the result was successfully reported to the store |
-| ONLINE_RP_FAILED | 1 | SEMI-SUCCESSFUL | The payment was completed successfully, but the result was not successfully delivered to the store in Online mode |
-| CPA_REJECTED | 2 | FAILED | The store refused to process the payment in the first phase |
-| CPA_NONE | 21 | FAILED | In-store payment verification was not performed. Perhaps the store or billing has been blocked |
-| CPA_FAILED | 4 | FAILED | An error occurred while interacting with the store during the first phase |
-| CLIENT_LOST | 53 | FAILED | The transaction timed out because the user refused to continue the payment for some reason |
-| USER_CANCEL | 54 | FAILED | The user deliberately chose to cancel the payment |
-| PAYMENT_REJECTED | -2 | FAILED | Refusal to process payment |
-| PAYMENT_FAILED | -3 | FAILED | Error during payment |
-| PAYMENT_REVERSED | -4 | FAILED | A successful payment was canceled on the initiative of the store at the registerPayment stage. The use of this code is for the future |
-| CS_NOTSUPPORTED | 11 | FAILED | The option of saving cards is not available for this store, payment for previously saved cards, recurring payments or currency is not supported for recurrent checks |
-| CS_LIMITEXCEEDED | 12 | FAILED | The amount in the response of the merchant PaymentAvail Response exceeds maxCardRegAmount |
-| CS_CARDNOTFOUND | 13 | FAILED | PaymentAvail Response received card details expired, card is not registered (received cardId is not available for this store) or card does not support recurring payments |
+class PaymentController
+{
+    public function __invoke()
+    {
+        $order_id = '899318b1ce0d5885cb7405fe86e3930178ff90be';
+
+        // string $order_id - Order id provided by checkout process
+        // string $token = null - (optional) JWT Token
+        $response = IPay::orderDetails($order_id);
+    }
+}
+```
+
+Example `$response`:
+
+```json
+{
+  "id": "6ed105e54e703fb6d2e5b7f68a0face71fea2cc6",
+  "status": "PERFORMED",
+  "intent": "CAPTURE",
+  "payer": {
+     "name": null,
+     "email_address": null,
+     "payer_id": null
+  },
+  "purchaseUnit": {
+     "amount": {
+         "value": "0.10",
+         "currency_code": "GEL"
+     },
+     "payee": {
+         "addres": "Shartava str., 77",
+         "contact": "0322444444",
+         "email_address": "support@ipay.ge"
+     },
+     "payments": [
+         {
+             "captures": [
+                 {
+                     "id": "1",
+                     "status": "PERFORMED",
+                     "amount": {
+                         "value": "0.10",
+                         "currency_code": "GEL"
+                     },
+                     "final_capture": "true",
+                     "create_time": "Tue Nov 17 19:04:29 GET 2020",
+                     "update_time": "Tue Nov 17 19:04:29 GET 2020"
+                 },
+                 {
+                     "id": "2",
+                     "status": "PERFORMED",
+                     "amount": {
+                         "value": "0.10",
+                         "currency_code": "GEL"
+                     },
+                     "final_capture": "true",
+                     "create_time": "Tue Nov 17 19:04:29 GET 2020",
+                     "update_time": "Tue Nov 17 19:04:29 GET 2020"
+                 }
+             ]
+         }
+     ],
+     "shop_order_id": "1"
+  },
+  "createTime": null,
+  "updateTime": null,
+  "errorHistory": []
+}
+```
+
+### Order Status
+
+In order to get order status you need to have order_id of payment.
+
+```php
+use Zorb\IPay\Facades\IPay;
+
+class PaymentController
+{
+    public function __invoke()
+    {
+        $order_id = '899318b1ce0d5885cb7405fe86e3930178ff90be';
+
+        // string $order_id - Order id provided by checkout process
+        // string $token = null - (optional) JWT Token
+        $response = IPay::orderStatus($order_id);
+    }
+}
+```
+
+Example `$response`:
+
+```json
+{
+  "status": "REJECTED"
+}
+```
+
+### Payment Details
+
+In order to get payment details you need to have order_id of payment.
+
+```php
+use Zorb\IPay\Facades\IPay;
+
+class PaymentController
+{
+    public function __invoke()
+    {
+        $order_id = '899318b1ce0d5885cb7405fe86e3930178ff90be';
+
+        // string $order_id - Order id provided by checkout process
+        // string $token = null - (optional) JWT Token
+        $response = IPay::paymentDetails($order_id);
+    }
+}
+```
+
+Example `$response`:
+
+```json
+{
+  "status": "error",
+  "pan": null,
+  "order_id": "899318b1ce0d5885cb7405fe86e3930178ff90be",
+  "pre_auth_status": null,
+  "payment_hash": "d7936f718c2b0ec2517a28c9de76966bcbecfe29",
+  "ipay_payment_id": "18625",
+  "status_description": "REJECTED",
+  "shop_order_id": "1",
+  "payment_method": "UNKNOWN",
+  "card_type": "UNKNOWN",
+  "transaction_id": null
+}
+```
+
+### Complete Pre-Authentication
+
+In order to get complete pre-authorized order you need to have order_id of payment.
+
+```php
+use Zorb\IPay\Facades\IPay;
+
+class PaymentController
+{
+    public function __invoke()
+    {
+        $order_id = '899318b1ce0d5885cb7405fe86e3930178ff90be';
+
+        // string $order_id - Order id provided by checkout process
+        // string $token = null - (optional) JWT Token
+        $response = IPay::completePreAuth($order_id);
+    }
+}
+```
 
 ## Environment Variables
 
 | Key | Meaning | Type | Default |
 | --- | --- | :---: | --- |
-| BOG_PAYMENT_DEBUG | This value decides to log or not to log requests | bool | false |
-| BOG_PAYMENT_URL | Payment url from Bank of Georgia | string | https://3dacq.georgiancard.ge/payment/start.wsm |
-| BOG_PAYMENT_MERCHANT_ID | Merchant ID from Bank of Georgia | string |  |
-| BOG_PAYMENT_PAGE_ID | Page ID from Bank of Georgia | string |  |
-| BOG_PAYMENT_ACCOUNT_ID | Account ID from Bank of Georgia | string |  |
-| BOG_PAYMENT_SHOP_NAME | Shop Name for Bank of Georgia payment | string | APP_NAME |
-| BOG_PAYMENT_SUCCESS_URL | Success callback url for Bank of Georgia | string | /payments/success | 
-| BOG_PAYMENT_FAIL_URL | Fail callback url for Bank of Georgia | string | /payments/fail | 
-| BOG_PAYMENT_CURRENCY | Default currency for Bank of Georgia payment | int | 981 | 
-| BOG_PAYMENT_LANGUAGE | Default language for Bank of Georgia payment | string | KA |
-| BOG_PAYMENT_HTTP_AUTH_USER | HTTP Authentication username for Bank of Georgia payment | string |  |
-| BOG_PAYMENT_HTTP_AUTH_PASS | HTTP Authentication password for Bank of Georgia payment | string |  |
-| BOG_PAYMENT_ALLOWED_IPS | Comma separated list of allowed ips to access your system from Bank of Georgia | string | 213.131.36.62 |
-| BOG_PAYMENT_CERTIFICATE_PATH | Bank of Georgia certificate path from storage | string | app/bog.cer |
-| BOG_PAYMENT_REFUND_API_PASS | Bank of Georgia api password for refund operation | string |  |
+| IPAY_DEBUG | This value decides to log or not to log requests | bool | false |
+| IPAY_URL | Payment url from Bank of Georgia | string | https://ipay.ge/opay/api/v1 |
+| IPAY_REDIRECT_URL | Callback url where will be redirected after a success/failure payment | string | https://website.com/payments/redirect |
+| IPAY_CLIENT_ID | Client ID provided by Bank of Georgia | string |  |
+| IPAY_LANGUAGE | Default language for Bank of Georgia payment | string | ka |
+| IPAY_SECRET_KEY | Secret key provided by Bank of Georgia | string |  |
 
 ## License
 

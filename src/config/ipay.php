@@ -10,17 +10,12 @@ return [
     /**
      * Payment url from Bank of Georgia
      */
-    'url' => env('IPAY_URL', 'https://dev.ipay.ge/opay/api/v1'),
+    'url' => env('IPAY_URL', 'https://ipay.ge/opay/api/v1'),
 
     /**
      * Callback url where will be redirected after a success/failure payment
      */
-    'payment_callback_url' => env('IPAY_PAYMENT_CALLBACK_URL', url('/payments/callback')),
-
-    /**
-     * Callback url where will be redirected after the refund process
-     */
-    'refund_callback_url' => env('IPAY_REFUND_CALLBACK_URL', url('/refunds/callback')),
+    'redirect_url' => env('IPAY_REDIRECT_URL', url('/payments/redirect')),
 
     /**
      * Client ID provided by Bank of Georgia
