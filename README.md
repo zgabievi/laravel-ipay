@@ -1,4 +1,4 @@
-# BOG Payment (iPay) integration for Laravel
+# iPay integration for Laravel
 
 [![Packagist](https://img.shields.io/packagist/v/zgabievi/laravel-ipay.svg)](https://packagist.org/packages/zgabievi/laravel-ipay)
 [![Packagist](https://img.shields.io/packagist/dt/zgabievi/laravel-ipay.svg)](https://packagist.org/packages/zgabievi/laravel-ipay)
