@@ -133,7 +133,7 @@ class IPay
 
         return $this->postRequest($url, [
             'intent' => $intent,
-            'redirect_url' => config('ipay.redirect_url'),
+            'redirect_url' => url(config('ipay.redirect_url')),
             'shop_order_id' => $order_id,
             'locale' => config('ipay.language'),
             'show_shop_order_id_on_extract' => true,

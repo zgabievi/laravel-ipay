@@ -15,7 +15,7 @@ return [
     /**
      * Callback url where will be redirected after a success/failure payment
      */
-    'redirect_url' => env('IPAY_REDIRECT_URL', url('/payments/redirect')),
+    'redirect_url' => env('IPAY_REDIRECT_URL', '/payments/redirect'),
 
     /**
      * Client ID provided by Bank of Georgia
