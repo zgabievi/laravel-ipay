@@ -172,6 +172,7 @@ class PaymentController
 
         if (isset($response->status) && $response->status === CheckoutStatus::Created) {
             return IPay::redirect($response);
+            // IPay::redirectURL($response); - will be used in some cases, like InertiaJS
         }
     }
 }

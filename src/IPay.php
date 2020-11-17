@@ -35,6 +35,30 @@ class IPay
     }
 
     /**
+     * Get redirect url
+     *
+     * @param \stdClass $response
+     * @param string $rel
+     * @return string|null
+     */
+    public function redirectUrl(\stdClass $response, string $rel = 'approve'): ?string
+    {
+        if (isset($response->links)) {
+            $link = collect($response->links)->filter(function ($item) use ($rel) {
+                return isset($item->rel) && $item->rel === $rel;
+            })->first();
+
+            if (!$link || !isset($link->href)) {
+                return back();
+            }
+
+            return $link->href;
+        }
+
+        return null;
+    }
+
+    /**
      * Generate array for purchase unit
      *
      * @param int $amount
