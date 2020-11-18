@@ -10,7 +10,7 @@ return [
     /**
      * Payment url from Bank of Georgia
      */
-    'url' => env('IPAY_URL', 'https://ipay.ge/opay/api/v1'),
+    'url' => env('IPAY_URL', 'https://dev.ipay.ge/opay/api/v1'),
 
     /**
      * Callback url where will be redirected after a success/failure payment

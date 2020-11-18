@@ -2,331 +2,465 @@
 
 namespace Zorb\IPay;
 
-use GuzzleHttp\Client;
+use Zorb\IPay\Enums\Intent;
 use Zorb\IPay\Enums\Currency;
 use Zorb\IPay\Enums\IndustryType;
 use Zorb\IPay\Enums\CaptureMethod;
-use GuzzleHttp\Exception\ClientException;
+use Illuminate\Http\RedirectResponse;
+use Zorb\IPay\Contracts\IPay as IPayContract;
 
 class IPay
 {
     /**
-     * Redirect to payment link
-     *
+     * @var \stdClass
+     */
+    protected $response;
+
+    /**
+     * @var string
+     */
+    protected $rel = 'approve';
+
+    /**
+     * @var int
+     */
+    protected $amount;
+
+    /**
+     * @var string
+     */
+    protected $currency = Currency::GEL;
+
+    /**
+     * @var string
+     */
+    protected $industry_type = IndustryType::Ecommerce;
+
+    /**
+     * @var int
+     */
+    protected $product_id;
+
+    /**
+     * @var int
+     */
+    protected $quantity = 1;
+
+    /**
+     * @var string
+     */
+    protected $description = '';
+
+    /**
+     * @var string
+     */
+    protected $txn_id = '';
+
+    /**
+     * @var string
+     */
+    protected $intent = Intent::Capture;
+
+    /**
+     * @var string|int
+     */
+    protected $shop_order_id;
+
+    /**
+     * @var array
+     */
+    protected $purchase_units = [];
+
+    /**
+     * @var array
+     */
+    protected $items = [];
+
+    /**
+     * @var string
+     */
+    protected $token;
+
+    /**
+     * @var string
+     */
+    protected $order_id;
+
+    /**
+     * @var string
+     */
+    protected $capture_method = CaptureMethod::Automatic;
+
+    /**
+     * @var IPayContract
+     */
+    protected $ipay;
+
+    /**
+     * IPay constructor.
+     * @param IPayContract $ipay
+     */
+    public function __construct(IPayContract $ipay)
+    {
+        $this->ipay = $ipay;
+    }
+
+    /**
      * @param \stdClass $response
+     * @return $this
+     */
+    public function setResponse(\stdClass $response): self
+    {
+        $this->response = $response;
+        return $this;
+    }
+
+    /**
      * @param string $rel
+     * @return $this
+     */
+    public function setRel(string $rel): self
+    {
+        $this->rel = $rel;
+        return $this;
+    }
+
+    /**
+     * @param int $amount
+     * @return $this
+     */
+    public function setAmount(int $amount): self
+    {
+        $this->amount = $amount;
+        return $this;
+    }
+
+    /**
+     * @param string $currency
+     * @return $this
+     */
+    public function setCurrency(string $currency): self
+    {
+        $this->currency = $currency;
+        return $this;
+    }
+
+    /**
+     * @param string $industry_type
+     * @return $this
+     */
+    public function setIndustryType(string $industry_type): self
+    {
+        $this->industry_type = $industry_type;
+        return $this;
+    }
+
+    /**
+     * @param int $product_id
+     * @return $this
+     */
+    public function setProduct(int $product_id): self
+    {
+        $this->product_id = $product_id;
+        return $this;
+    }
+
+    /**
+     * @param int $quantity
+     * @return $this
+     */
+    public function setQuantity(int $quantity): self
+    {
+        $this->quantity = $quantity;
+        return $this;
+    }
+
+    /**
+     * @param string $description
+     * @return $this
+     */
+    public function setDescription(string $description): self
+    {
+        $this->description = $description;
+        return $this;
+    }
+
+    /**
+     * @param string $txn_id
+     * @return $this
+     */
+    public function setTransaction(string $txn_id): self
+    {
+        $this->txn_id = $txn_id;
+        return $this;
+    }
+
+    /**
+     * @param string $intent
+     * @return $this
+     */
+    public function setIntent(string $intent): self
+    {
+        $this->intent = $intent;
+        return $this;
+    }
+
+    /**
+     * @param string|int $shop_order_id
+     * @return $this
+     */
+    public function setShopOrder($shop_order_id): self
+    {
+        $this->shop_order_id = $shop_order_id;
+        return $this;
+    }
+
+    /**
+     * @param array $units
+     * @return $this
+     */
+    public function setPurchaseUnits(array $units = []): self
+    {
+        $this->purchase_units = $units;
+        return $this;
+    }
+
+    /**
+     * @param array $items
+     * @return $this
+     */
+    public function setItems(array $items = []): self
+    {
+        $this->items = $items;
+        return $this;
+    }
+
+    /**
+     * @param string $token
+     * @return $this
+     */
+    public function setToken(string $token): self
+    {
+        $this->token = $token;
+        return $this;
+    }
+
+    /**
+     * @param string $capture_method
+     * @return $this
+     */
+    public function setCaptureMethod(string $capture_method): self
+    {
+        $this->capture_method = $capture_method;
+        return $this;
+    }
+
+    /**
+     * @param string $order_id
+     * @return $this
+     */
+    public function setOrder(string $order_id): self
+    {
+        $this->order_id = $order_id;
+        return $this;
+    }
+
+    /**
+     * @param IPayContract $ipay
+     * @param \stdClass|null $response
+     * @param string|null $rel
      * @return \Illuminate\Http\RedirectResponse
      */
-    public function redirect(\stdClass $response, string $rel = 'approve'): \Illuminate\Http\RedirectResponse
+    public function redirect(\stdClass $response = null, string $rel = null): RedirectResponse
     {
-        if (isset($response->links)) {
-            $link = collect($response->links)->filter(function ($item) use ($rel) {
-                return isset($item->rel) && $item->rel === $rel;
-            })->first();
-
-            if (!$link || !isset($link->href)) {
-                return back();
-            }
-
-            return redirect($link->href);
-        }
-
-        return back();
+        return $this->ipay->redirect(
+            $response ?: $this->response,
+            $rel ?: $this->rel
+        );
     }
 
     /**
-     * Get redirect url
-     *
-     * @param \stdClass $response
-     * @param string $rel
+     * @param IPayContract $ipay
+     * @param \stdClass|null $response
+     * @param string|null $rel
      * @return string|null
      */
-    public function redirectUrl(\stdClass $response, string $rel = 'approve'): ?string
+    public function redirectUrl(\stdClass $response = null, string $rel = null): ?string
     {
-        if (isset($response->links)) {
-            $link = collect($response->links)->filter(function ($item) use ($rel) {
-                return isset($item->rel) && $item->rel === $rel;
-            })->first();
-
-            if (!$link || !isset($link->href)) {
-                return back();
-            }
-
-            return $link->href;
-        }
-
-        return null;
+        return $this->ipay->redirectUrl(
+            $response ?: $this->response,
+            $rel ?: $this->rel
+        );
     }
 
     /**
-     * Generate array for purchase unit
-     *
-     * @param int $amount
+     * @param IPayContract $ipay
+     * @param int|null $amount
      * @param string|null $currency
      * @param string|null $industry_type
      * @return array
      */
-    public function purchaseUnit(int $amount, string $currency = null, string $industry_type = null): array
+    public function purchaseUnit(int $amount = null, string $currency = null, string $industry_type = null): array
     {
-        return [
-            'amount' => [
-                'currency_code' => $currency ?: Currency::GEL,
-                'value' => $amount / 100,
-            ],
-            'industry_type' => $industry_type ?: IndustryType::Ecommerce,
-        ];
+        return $this->ipay->purchaseUnit(
+            $amount ?: $this->amount,
+            $currency ?: $this->currency,
+            $industry_type ?: $this->industry_type
+        );
     }
 
     /**
-     * Generate array for purchase item
-     *
-     * @param int $product_id
-     * @param int $amount
-     * @param int $quantity
-     * @param string $description
+     * @param IPayContract $ipay
+     * @param int|null $product_id
+     * @param int|null $amount
+     * @param int|null $quantity
+     * @param string|null $description
      * @return array
      */
-    public function purchaseItem(int $product_id, int $amount, int $quantity = 1, string $description = ''): array
+    public function purchaseItem(int $product_id = null, int $amount = null, int $quantity = null, string $description = null): array
     {
-        return [
-            'amount' => $amount / 100,
-            'description' => $description,
-            'quantity' => $quantity,
-            'product_id' => $product_id,
-        ];
+        return $this->ipay->purchaseItem(
+            $product_id ?: $this->product_id,
+            $amount ?: $this->amount,
+            $quantity ?: $this->quantity,
+            $description ?: $this->description
+        );
     }
 
     /**
-     * Recurring method to repeat transaction
-     *
-     * @param string $transaction_id
-     * @param string $intent
+     * @param IPayContract $ipay
+     * @param string|null $txn_id
+     * @param string|null $intent
+     * @param string|int|null $shop_order_id
+     * @param array|null $purchase_units
+     * @param array|null $items
      * @param string|null $token
-     * @param int $order_id
-     * @param array $units
-     * @param array $items
-     * @param string $capture_method
+     * @param string|null $capture_method
      * @return \stdClass|void
      * @throws \GuzzleHttp\Exception\GuzzleException
      */
-    public function repeat(string $transaction_id, string $intent, int $order_id, array $units, array $items = [], string $token = null, string $capture_method = ''): \stdClass
+    public function repeat(string $txn_id = null, string $intent = null, $shop_order_id = null, array $purchase_units = null, array $items = null, string $token = null, string $capture_method = null): ?\stdClass
     {
-        return $this->checkout($intent, $order_id, $units, $items, $token, $capture_method, $transaction_id);
+        return $this->ipay->repeat(
+            $txn_id ?: $this->txn_id,
+            $intent ?: $this->intent,
+            $shop_order_id ?: $this->shop_order_id,
+            $purchase_units ?: $this->purchase_units,
+            $items ?: $this->items,
+            $token ?: $this->token,
+            $capture_method ?: $this->capture_method
+        );
     }
 
     /**
-     * Start checkout process
-     *
-     * @param string $intent
-     * @param int $order_id
-     * @param array $units
+     * @param IPayContract $ipay
+     * @param string|null $intent
+     * @param null $shop_order_id
+     * @param array|null $purchase_units
+     * @param array|null $items
      * @param string|null $token
-     * @param array $items
-     * @param string $capture_method
-     * @param string $transaction_id
+     * @param string|null $capture_method
+     * @param string|null $txn_id
      * @return \stdClass|void
      * @throws \GuzzleHttp\Exception\GuzzleException
      */
-    public function checkout(string $intent, int $order_id, array $units, array $items = [], string $token = null, string $capture_method = '', string $transaction_id = ''): \stdClass
+    public function checkout(string $intent = null, $shop_order_id = null, array $purchase_units = null, array $items = null, string $token = null, string $capture_method = null, string $txn_id = null): ?\stdClass
     {
-        $url = config('ipay.url') . '/checkout/orders';
-
-        return $this->postRequest($url, [
-            'intent' => $intent,
-            'redirect_url' => url(config('ipay.redirect_url')) . '?order_id=' . $order_id,
-            'shop_order_id' => $order_id,
-            'locale' => config('ipay.language'),
-            'show_shop_order_id_on_extract' => true,
-            'capture_method' => $capture_method ?: CaptureMethod::Automatic,
-            'card_transaction_id' => $transaction_id,
-            'purchase_units' => $units,
-            'items' => $items,
-        ], $token, null, 'json');
+        return $this->ipay->checkout(
+            $intent ?: $this->intent,
+            $shop_order_id ?: $this->shop_order_id,
+            $purchase_units ?: $this->purchase_units,
+            $items ?: $this->items,
+            $token ?: $this->token,
+            $capture_method ?: $this->capture_method,
+            $txn_id ?: $this->txn_id
+        );
     }
 
     /**
-     * Reusable http post request
-     *
-     * @param string $url
-     * @param array $data
-     * @param string|null $token
-     * @param string|null $authorization
-     * @param string $type
-     * @return \stdClass
-     * @throws \GuzzleHttp\Exception\GuzzleException
-     */
-    protected function postRequest(string $url, array $data, string $token = null, string $authorization = null, string $type = 'form_params'): \stdClass
-    {
-        if (!$authorization) {
-            $token = $this->requestToken($token);
-        }
-
-        $client = new Client();
-        try {
-            $params = $type === 'json' ? ['json' => $data] : ['form_params' => $data];
-            $response = $client->post($url, array_merge($params, [
-                'headers' => [
-                    'Authorization' => $authorization ?: 'Bearer ' . $token,
-                ],
-            ]));
-        } catch (ClientException $exception) {
-            $error = json_decode($exception->getResponse()->getBody());
-
-            if (!isset($error->error_code)) {
-                return $error;
-            }
-
-            abort($error->error_code, isset($error->error_message) ? $error->error_message : '');
-        }
-
-        return json_decode($response->getBody());
-    }
-
-    /**
-     * Use or get token for next request
-     *
-     * @param string|null $token
-     * @return string
-     * @throws \GuzzleHttp\Exception\GuzzleException
-     */
-    protected function requestToken(string $token = null): string
-    {
-        if (!$token) {
-            $request = self::token();
-
-            if (isset($request->access_token)) {
-                return $request->access_token;
-            }
-        }
-
-        return $token;
-    }
-
-    /**
-     * Request token for other operations
-     *
+     * @param IPayContract $ipay
      * @return \stdClass|void
      * @throws \GuzzleHttp\Exception\GuzzleException
      */
-    public function token()
+    public function token(IPayContract $ipay): ?\stdClass
     {
-        $client_id = config('ipay.client_id');
-        $secret_key = config('ipay.secret_key');
-        $url = config('ipay.url') . '/oauth2/token';
-        $authorization = 'Basic ' . base64_encode($client_id . ':' . $secret_key);
-
-        return $this->postRequest($url, [
-            'grant_type' => 'client_credentials',
-        ], null, $authorization);
+        return $this->ipay->token();
     }
 
     /**
-     * Refund some amount back
-     *
-     * @param string $order_id
-     * @param int $amount
+     * @param IPayContract $ipay
+     * @param string|null $order_id
+     * @param int|null $amount
      * @param string|null $token
-     * @return \stdClass
+     * @return \stdClass|null
      * @throws \GuzzleHttp\Exception\GuzzleException
      */
-    public function refund(string $order_id, int $amount, string $token = null): \stdClass
+    public function refund(string $order_id = null, int $amount = null, string $token = null): ?\stdClass
     {
-        $url = config('ipay.url') . '/checkout/refund';
-
-        return $this->postRequest($url, [
-            'order_id' => $order_id,
-            'amount' => $amount / 100,
-        ], $token);
+        return $this->ipay->refund(
+            $order_id ?: $this->order_id,
+            $amount ?: $this->amount,
+            $token ?: $this->token
+        );
     }
 
     /**
-     * Get details of order
-     *
-     * @param string $order_id
+     * @param IPayContract $ipay
+     * @param string|null $order_id
      * @param string|null $token
-     * @return \stdClass
+     * @return \stdClass|null
      * @throws \GuzzleHttp\Exception\GuzzleException
      */
-    public function orderDetails(string $order_id, string $token = null): \stdClass
+    public function orderDetails(string $order_id = null, string $token = null): ?\stdClass
     {
-        $url = config('ipay.url') . '/checkout/orders/' . $order_id;
-
-        return $this->getRequest($url, $token);
+        return $this->ipay->orderDetails(
+            $order_id ?: $this->order_id,
+            $token ?: $this->token
+        );
     }
 
     /**
-     * Reusable http get request
-     *
-     * @param string $url
+     * @param IPayContract $ipay
+     * @param string|null $order_id
      * @param string|null $token
-     * @return \stdClass
+     * @return \stdClass|null
      * @throws \GuzzleHttp\Exception\GuzzleException
      */
-    protected function getRequest(string $url, string $token = null): \stdClass
+    public function orderStatus(string $order_id = null, string $token = null): ?\stdClass
     {
-        $token = $this->requestToken($token);
-        $client = new Client();
-        try {
-            $response = $client->get($url, [
-                'headers' => [
-                    'Authorization' => 'Bearer ' . $token,
-                ],
-            ]);
-        } catch (ClientException $exception) {
-            $error = json_decode($exception->getResponse()->getBody());
-
-            if (!isset($error->error_code)) {
-                return $error;
-            }
-
-            abort($error->error_code, isset($error->error_message) ? $error->error_message : '');
-        }
-
-        return json_decode($response->getBody());
+        return $this->ipay->orderStatus(
+            $order_id ?: $this->order_id,
+            $token ?: $this->token
+        );
     }
 
     /**
-     * Get status of order
-     *
-     * @param string $order_id
+     * @param IPayContract $ipay
+     * @param string|null $order_id
      * @param string|null $token
-     * @return \stdClass
+     * @return \stdClass|null
      * @throws \GuzzleHttp\Exception\GuzzleException
      */
-    public function orderStatus(string $order_id, string $token = null): \stdClass
+    public function paymentDetails(string $order_id = null, string $token = null): ?\stdClass
     {
-        $url = config('ipay.url') . '/checkout/orders/status/' . $order_id;
-
-        return $this->getRequest($url, $token);
+        return $this->ipay->paymentDetails(
+            $order_id ?: $this->order_id,
+            $token ?: $this->token
+        );
     }
 
     /**
-     * Get details of payment
-     *
-     * @param string $order_id
+     * @param IPayContract $ipay
+     * @param string|null $order_id
      * @param string|null $token
-     * @return \stdClass
+     * @return \stdClass|null
      * @throws \GuzzleHttp\Exception\GuzzleException
      */
-    public function paymentDetails(string $order_id, string $token = null): \stdClass
+    public function completePreAuth(string $order_id = null, string $token = null): ?\stdClass
     {
-        $url = config('ipay.url') . '/checkout/payment/' . $order_id;
-
-        return $this->getRequest($url, $token);
-    }
-
-    /**
-     * Complete pre authorized orders
-     *
-     * @param string $order_id
-     * @param string|null $token
-     * @return \stdClass
-     * @throws \GuzzleHttp\Exception\GuzzleException
-     */
-    public function completePreAuth(string $order_id, string $token = null): \stdClass
-    {
-        $url = config('ipay.url') . '/checkout/payment/pre-auth/complete/' . $order_id;
-
-        return $this->getRequest($url, $token);
+        return $this->ipay->completePreAuth(
+            $order_id ?: $this->order_id,
+            $token ?: $this->token
+        );
     }
 }

@@ -122,6 +122,34 @@ class PaymentController
 }
 ```
 
+You can set parameters separately:
+
+```php
+use Zorb\IPay\Facades\IPay;
+use Zorb\IPay\Enums\Intent;
+use Zorb\IPay\Enums\CaptureMethod;
+
+class PaymentController
+{
+    public function __invoke()
+    {
+        $order_id = 1;
+
+        $response = IPay::setIntent(Intent::Capture)
+            ->setShopOrder($order_id)
+            ->setPurchaseUnits([ IPay::purchaseUnit(10) ])
+            ->setItems([
+                IPay::purchaseItem(1, 10, 1, 'Item #1'),
+                IPay::purchaseItem(2, 10, 1, 'Item #2'),
+            ])
+            ->setToken('IPAY_JWT_TOKEN')
+            ->setCaptureMethod(CaptureMethod::Manual)
+            ->setTransaction('IPAY_TRANSACTION_ID')
+            ->checkout();
+    }
+}
+```
+
 Example `$response`:
 
 ```json
@@ -178,6 +206,40 @@ class PaymentController
 }
 ```
 
+You can set parameters separately:
+
+```php
+use Zorb\IPay\Facades\IPay;
+use Zorb\IPay\Enums\Intent;
+use Zorb\IPay\Enums\CaptureMethod;
+use Zorb\IPay\Enums\CheckoutStatus;
+
+class PaymentController
+{
+    public function __invoke()
+    {
+        $order_id = 1;
+
+        $response = IPay::setIntent(Intent::Capture)
+            ->setShopOrder($order_id)
+            ->setPurchaseUnits([ IPay::purchaseUnit(10) ])
+            ->setItems([
+                IPay::purchaseItem(1, 10, 1, 'Item #1'),
+                IPay::purchaseItem(2, 10, 1, 'Item #2'),
+            ])
+            ->setToken('IPAY_JWT_TOKEN')
+            ->setCaptureMethod(CaptureMethod::Manual)
+            ->setTransaction('IPAY_TRANSACTION_ID')
+            ->checkout();
+
+        if (isset($response->status) && $response->status === CheckoutStatus::Created) {
+            return IPay::setResponse($response)->redirect();
+            // IPay::setResponse($response)->redirectUrl();
+        }
+    }
+}
+```
+
 Redirect method will find redirect link for payment and redirect user to that page.
 
 ### Recurring
@@ -215,6 +277,37 @@ class PaymentController
 }
 ```
 
+You can set parameters separately:
+
+```php
+use Zorb\IPay\Facades\IPay;
+use Zorb\IPay\Enums\Intent;
+use Zorb\IPay\Enums\CheckoutStatus;
+
+class PaymentController
+{
+    public function __invoke()
+    {
+        $order_id = 1;
+        $transaction_id = '899318B1CE0D5885CB7';
+
+        $response = IPay::setIntent(Intent::Capture)
+            ->setShopOrder($order_id)
+            ->setPurchaseUnits([ IPay::purchaseUnit(10) ])
+            ->setItems([
+                IPay::purchaseItem(1, 10, 1, 'Item #1'),
+                IPay::purchaseItem(2, 10, 1, 'Item #2'),
+            ])
+            ->setTransaction($transaction_id)
+            ->repeat();
+
+        if (isset($response->status) && $response->status === CheckoutStatus::Created) {
+            return IPay::setResponse($response)->redirect();
+        }
+    }
+}
+```
+
 ### Refund
 
 In order to refund money you need to have order_id of payment.
@@ -232,6 +325,24 @@ class PaymentController
         // int $amount - Amount you want to refund (in cents)
         // string $token = null - (optional) JWT Token
         $response = IPay::refund($order_id, 10);
+    }
+}
+```
+
+You can set parameters separately:
+
+```php
+use Zorb\IPay\Facades\IPay;
+
+class PaymentController
+{
+    public function __invoke()
+    {
+        $order_id = '899318b1ce0d5885cb7405fe86e3930178ff90be';
+
+        $response = IPay::setOrder($order_id)
+            ->setAmount(10)
+            ->refund();
     }
 }
 ```
@@ -254,6 +365,23 @@ class PaymentController
         // string $order_id - Order id provided by checkout process
         // string $token = null - (optional) JWT Token
         $response = IPay::orderDetails($order_id);
+    }
+}
+```
+
+You can set parameters separately:
+
+```php
+use Zorb\IPay\Facades\IPay;
+
+class PaymentController
+{
+    public function __invoke()
+    {
+        $order_id = '899318b1ce0d5885cb7405fe86e3930178ff90be';
+
+        $response = IPay::setOrder($order_id)
+            ->orderDetails();
     }
 }
 ```
@@ -336,6 +464,23 @@ class PaymentController
 }
 ```
 
+You can set parameters separately:
+
+```php
+use Zorb\IPay\Facades\IPay;
+
+class PaymentController
+{
+    public function __invoke()
+    {
+        $order_id = '899318b1ce0d5885cb7405fe86e3930178ff90be';
+
+        $response = IPay::setOrder($order_id)
+            ->orderStatus();
+    }
+}
+```
+
 Example `$response`:
 
 ```json
@@ -360,6 +505,23 @@ class PaymentController
         // string $order_id - Order id provided by checkout process
         // string $token = null - (optional) JWT Token
         $response = IPay::paymentDetails($order_id);
+    }
+}
+```
+
+You can set parameters separately:
+
+```php
+use Zorb\IPay\Facades\IPay;
+
+class PaymentController
+{
+    public function __invoke()
+    {
+        $order_id = '899318b1ce0d5885cb7405fe86e3930178ff90be';
+
+        $response = IPay::setOrder($order_id)
+            ->paymentDetails();
     }
 }
 ```
@@ -401,6 +563,43 @@ class PaymentController
     }
 }
 ```
+
+You can set parameters separately:
+
+```php
+use Zorb\IPay\Facades\IPay;
+
+class PaymentController
+{
+    public function __invoke()
+    {
+        $order_id = '899318b1ce0d5885cb7405fe86e3930178ff90be';
+
+        $response = IPay::setOrder($order_id)
+            ->completePreAuth();
+    }
+}
+```
+
+## All helper methods to set parameters separately
+| Method | Description | Possible values | Default | Used in |
+| :----- | :---------- | :-------------- | :------ | :------ |
+| setResponse | Response from other iPay request | - | - | redirect, redirectUrl |
+| setRel | Rel to point correct link from response | approve, self | approve | redirect, redirectUrl |
+| setAmount | Money amount in cents (tetris) | - | - | purchaseUnit, purchaseItem, refund |
+| setCurrency | Currency of the amount | GEL, USD, EUR | GEL | purchaseUnit |
+| setIndustryType | Industry type of purchase unit | ECOMMERCE | ECOMMERCE | purchaseUnit |
+| setProduct | Your product id | - | - | purchaseItem |
+| setQuantity | Quantity of purchase item | - | - | purchaseItem |
+| setDescription | Description of purchase item | - | - | purchaseItem |
+| setTransaction | Transaction id for recurring | - | - | checkout, repeat |
+| setIntent | Intent for payment | CAPTURE, AUTHORIZE, LOAN | CAPTURE | checkout, repeat |
+| setShopOrder | Your order id | - | - | checkout, repeat |
+| setPurchaseUnits | One purchase unit as an array | - | - | checkout, repeat |
+| setItems | List of items of purchase | - | - | checkout, repeat |
+| setToken | JWT Token from iPay | - | - | checkout, repeat, refund, orderDetails, orderStatus, paymentDetails, completePreAuth |
+| setCaptureMethod | Method for checkout | AUTOMATIC, MANUAL | AUTOMATIC | checkout, repeat |
+| setOrder | Order id from iPay responses | - | - | refund, orderDetails, orderStatus, paymentDetails, completePreAuth |
 
 ## Environment Variables
 
