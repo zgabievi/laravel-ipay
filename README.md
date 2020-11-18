@@ -4,7 +4,7 @@
 [![Packagist](https://img.shields.io/packagist/dt/zgabievi/laravel-ipay.svg)](https://packagist.org/packages/zgabievi/laravel-ipay)
 [![license](https://img.shields.io/github/license/zgabievi/laravel-ipay.svg)](https://packagist.org/packages/zgabievi/laravel-ipay)
 
-<img src="https://raw.githubusercontent.com/zgabievi/laravel-ipay/master/assets/laravel-ipay.jpg" srcset="https://raw.githubusercontent.com/zgabievi/laravel-ipay/master/assets/laravel-ipay@2x.jpg 2x" alt="Laravel + iPay" />
+<img src="https://raw.githubusercontent.com/zgabievi/laravel-ipay/main/assets/laravel-ipay.jpg" srcset="https://raw.githubusercontent.com/zgabievi/laravel-ipay/main/assets/laravel-ipay@2x.jpg 2x" alt="Laravel + iPay" />
 
 [📝 iPay documentation can be found here](https://developer.ipay.ge/review)
 
