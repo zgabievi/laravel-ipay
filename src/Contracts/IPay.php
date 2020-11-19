@@ -152,10 +152,10 @@ class IPay
      * @param string|null $token
      * @param string|null $authorization
      * @param string $type
-     * @return \stdClass
+     * @return \stdClass|null
      * @throws \GuzzleHttp\Exception\GuzzleException
      */
-    protected function postRequest(string $url, array $data, string $token = null, string $authorization = null, string $type = 'form_params'): \stdClass
+    protected function postRequest(string $url, array $data, string $token = null, string $authorization = null, string $type = 'form_params'): ?\stdClass
     {
         if (!$authorization) {
             $token = $this->requestToken($token);
