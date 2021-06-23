@@ -229,7 +229,7 @@ class IPay
      * @return \stdClass
      * @throws \GuzzleHttp\Exception\GuzzleException
      */
-    public function refund(string $order_id, int $amount, string $token = null): \stdClass
+    public function refund(string $order_id, int $amount, string $token = null): ?\stdClass
     {
         $url = config('ipay.url') . '/checkout/refund';
 
