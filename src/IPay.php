@@ -378,11 +378,10 @@ class IPay
     }
 
     /**
-     * @param IPayContract $ipay
      * @return \stdClass|void
      * @throws \GuzzleHttp\Exception\GuzzleException
      */
-    public function token(IPayContract $ipay): ?\stdClass
+    public function token(): ?\stdClass
     {
         return $this->ipay->token();
     }
